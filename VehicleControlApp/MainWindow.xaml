@@ -1,0 +1,125 @@
+﻿<Window x:Class="VehicleControlApp.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Vehicle Control" Height="600" Width="525">
+    <TabControl SelectionChanged="TabControl_SelectionChanged">
+        <!-- Vehicle Control Tab -->
+        <TabItem Header="Vehicle Control">
+            <Grid>
+                <!-- Server Configuration -->
+                <Label Content="Server IP:" VerticalAlignment="Top" Margin="10,10,0,0"/>
+                <TextBox x:Name="txtServerIP" VerticalAlignment="Top" Margin="82,10,318,0" Text="127.0.0.1"/>
+
+                <Label Content="Port:" VerticalAlignment="Top" Margin="240,10,0,0"/>
+                <TextBox x:Name="txtPort" VerticalAlignment="Top" Margin="290,10,150,0" Text="5677"/>
+
+                <Button x:Name="btnConnect" Content="Connect" VerticalAlignment="Top" Margin="320,10,0,0" Width="80" Click="Connect_Click"  Background="Red"/>
+
+                <!-- Message Box -->
+                <TextBox x:Name="txtMessages" VerticalAlignment="Top" Margin="10,30,10,0" TextWrapping="Wrap" IsReadOnly="True" Height="180" VerticalScrollBarVisibility="Auto"/>
+                <Button Content="Clear Messages" VerticalAlignment="Top" Margin="10,210,0,0" Width="120" Click="ClearMessages_Click"/>
+
+                <!-- Mode Selection -->
+                <GroupBox Header="Order Mode" Margin="10,250,320,10">
+                    <StackPanel>
+                        <RadioButton x:Name="rbNT8000" Content="Master Mode" GroupName="Modes" Checked="Mode_Checked"/>
+                        <RadioButton x:Name="rbOther" Content="Local Mode" GroupName="Modes" Checked="Mode_Checked"/>
+                        <RadioButton x:Name="rbLocalModeTM" Content="Local Mode with TM" GroupName="Modes" Checked="Mode_Checked"/>
+                    </StackPanel>
+                </GroupBox>
+
+                <!-- Command Inputs -->
+                <StackPanel VerticalAlignment="Top" HorizontalAlignment="Right" Width="200" Margin="0,250,10,10">
+                    <Label Content="Destination Point:"/>
+                    <TextBox x:Name="txtPointID" Width="180"/>
+
+                    <Label Content="Via Points:"/>
+                    <TextBox x:Name="txtViaPoints" Width="180"/>
+
+                    <Label Content="Operation Code:"/>
+                    <TextBox x:Name="txtOperationCode" Width="180"/>
+
+                    <Label Content="Parameter1:"/>
+                    <TextBox x:Name="txtOperationParam1" Width="180"/>
+
+                    <Label Content="Parameter2:"/>
+                    <TextBox x:Name="txtOperationParam2" Width="180"/>
+
+                    <Button Content="Send Command" Width="180" Margin="0,10,0,0" Click="SendCommand_Click"/>
+                </StackPanel>
+            </Grid>
+        </TabItem>
+
+        <!-- Diagnostic Tab -->
+        <TabItem Header="Diagnostic">
+            <Grid>
+               
+            </Grid>
+        </TabItem>
+
+        <!-- External Path Tab -->
+        <TabItem Header="External Path" Name="ExternalPathTab">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- Position Table -->
+                <GroupBox Header="Position" Grid.Row="0">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <!-- Row Definitions and Data Display for Position -->
+                        <!-- Example for Angle -->
+                        <Label Content="Angle:" Grid.Column="0" Grid.Row="0"/>
+                        <TextBlock x:Name="txtAngle"  Text="{Binding Angle}" Grid.Column="1" Grid.Row="0"/>
+                        <Label Content="Angle2:" Grid.Column="0" Grid.Row="1"/>
+                        <TextBlock x:Name="txtAngle2"  Text="{Binding Angle2}" Grid.Column="1" Grid.Row="1"/>
+                        <Label Content="NavLevel:" Grid.Column="0" Grid.Row="2"/>
+                        <TextBlock x:Name="txtNavLevel"  Text="{Binding NavLevel}" Grid.Column="1" Grid.Row="2"/>
+                        <Label Content="Valid:" Grid.Column="0" Grid.Row="3"/>
+                        <TextBlock x:Name="txtValid" Text="{Binding Valid}" Grid.Column="1" Grid.Row="3"/>
+                        <Label Content="X:" Grid.Column="0" Grid.Row="4"/>
+                        <TextBlock x:Name="txtX" Text="{Binding X}" Grid.Column="1" Grid.Row="4"/>
+                        <Label Content="Y:" Grid.Column="0" Grid.Row="5"/>
+                        <TextBlock x:Name="txtY" Text="{Binding Y}" Grid.Column="1" Grid.Row="5"/>
+                        <!-- Add other variables similarly -->
+                    </Grid>
+                </GroupBox>
+
+                <!-- External Path Table -->
+                <GroupBox Header="External Path" Grid.Row="1">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <!-- Row Definitions and Data Display for External Path -->
+                        <!-- Example for ReqExtSegment -->
+                        <Label Content="ReqExtSegment:" Grid.Column="0" Grid.Row="0"/>
+                        <TextBlock x:Name="txtReqExtSegment" Text="{Binding ReqExtSegment}" Grid.Column="1" Grid.Row="0"/>
+                        <Label Content="ReqSegmentId:" Grid.Column="0" Grid.Row="1"/>
+                        <TextBlock x:Name="txtReqSegmentId" Text="{Binding ReqSegmentId}" Grid.Column="1" Grid.Row="1"/>
+                        <!-- Add other variables similarly -->
+                    </Grid>
+                </GroupBox>
+            </Grid>
+        </TabItem>
+    </TabControl>
+</Window>
