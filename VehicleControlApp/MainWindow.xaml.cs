@@ -14,19 +14,21 @@ using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
 using System.Xml;
-
+using JTDevice;
 
 namespace VehicleControlApp
 {
     public partial class MainWindow : Window
     {
         private PositionData positionData = new PositionData();
+        Device device;
 
         public MainWindow()
         {
             InitializeComponent();
             SingletonClient.Instance.DataReceived += OnDataReceived;
             this.DataContext = positionData;
+            device = new Device(0, txtServerIP.Text, int.Parse(txtPort.Text));
         }
         private bool isConnected = false;
         private void Connect_Click(object sender, RoutedEventArgs e)
@@ -35,7 +37,8 @@ namespace VehicleControlApp
             {
                 try
                 {
-                    SingletonClient.Instance.Connect(txtServerIP.Text, int.Parse(txtPort.Text));
+                    //SingletonClient.Instance.Connect(txtServerIP.Text, int.Parse(txtPort.Text));
+                    device.Connect();
                     AppendMessage("Connected to server");
                     isConnected = true;
                     btnConnect.Content = "Disconnect";
@@ -48,7 +51,8 @@ namespace VehicleControlApp
             }
             else
             {
-                SingletonClient.Instance.Disconnect();
+                //SingletonClient.Instance.Disconnect();
+                device.Disconnect();
                 AppendMessage("Disconnected from server");
                 isConnected = false;
                 btnConnect.Content = "Connect";

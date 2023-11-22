@@ -6,6 +6,7 @@ using System.Net;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.IO;
 
 namespace JTDevice
 {
@@ -14,113 +15,41 @@ namespace JTDevice
         public static NLog.Logger logger = NLog.LogManager.GetCurrentClassLogger();
     }
 
-    internal class Device : IDisposable
+    // 设备连接管理器
+    public class DeviceConnector
     {
-        private int deviceID;
         private TcpClient tcpClient;
+        private string deviceIP;
+        private int devicePort;
         private NetworkStream networkStream;
-        private string remote_IP;
-        private int RemotePort = 5677;  //车载控制器的默认端口：5677
+        public DateTime ReceiveDeviceDataTime;
 
-        private bool IsConnectedToPLC = false;
-        public string RemoteIp_choose;
+        public bool IsConnectedToDevice { get; private set; } = false;
 
-        public bool Is_ConnectedToPLC;  //对外接口
-
-        private bool Heartbeat = false;
-        private bool ShowConnect_flag = false;
-
-        private int tryconnect_count = 0;
-
-        DateTime ReceivePlcDataTime;
-
-        public string Remote_IP { get { return remote_IP; } set { remote_IP = value; } }
-        public enum_ConnectStatus Connect_status;
-
-        public void task()
+        public DeviceConnector(string ip, int port)
         {
-            ThreadStart threadStart = new ThreadStart(Connect);//通过ThreadStart委托告诉子线程执行什么方法　　
-            Thread thread = new Thread(threadStart);
-            thread.Start();                                      //启动新线程
-                                                                 //thread.Abort();                                    //终止改线程，比较粗暴
+            deviceIP = ip;
+            devicePort = port;
         }
 
         public void Connect()
         {
-            if (!IsConnectedToPLC)
-            {
-                ConnectToPLC();
-                ShowConnect_flag = true;
-            }
+            tcpClient = new TcpClient();
+            IPAddress ipaddress = IPAddress.Parse(deviceIP);
+            tcpClient.BeginConnect(ipaddress, devicePort, new AsyncCallback(AsynConnect), tcpClient);
         }
 
-
-        public void CloseByButton()
-        {
-            boolRemoteIO_TimerEnable = false;
-            boolReconnectTimerEnable = false;
-            DisconnectPLC();
-        }
-
-        public void ConnectToPLC()
-        {
-            try
-            {
-                tcpClient = new TcpClient();
-                IPAddress ipaddress = IPAddress.Parse(remote_IP);
-                tcpClient.BeginConnect(ipaddress, RemotePort, new AsyncCallback(AsynConnect), tcpClient);
-
-                boolRemoteIO_TimerEnable = true;//是否执行RemoteIO连接状态事件；
-                boolReconnectTimerEnable = true;//是否执行Reconnect事件；
-
-                tryconnect_count++;
-                if (tryconnect_count == int.MaxValue) { tryconnect_count = 0; }
-                Console.WriteLine($"{DateTime.Now}:Device{this.deviceID} Try to connect：{remote_IP}，Count：{tryconnect_count}");
-                Logger.logger.Info(string.Format($"Device{this.deviceID}  Try to connect：{remote_IP}，Count：{tryconnect_count}"));
-                if (tryconnect_count > 99999)
-                {
-                    tryconnect_count = 0;
-
-                }
-
-            }
-            catch (Exception ex)
-            {
-                ShowMessageInConsoleDebug(ex.Message + "请检查远程IO服务器连接");
-                Console.WriteLine(ex.Message);
-            }
-        }
-
-        public void DisconnectPLC()
+        public void Disconnect()
         {
             if (tcpClient != null)
             {
                 tcpClient.Close();
-                //关闭连接后马上更新连接状态标志
+                //tcpClient = null;
                 if (tcpClient != null)
                 {
                     tcpClient.Close();
-                    //关闭连接后马上更新连接状态标志
                 }
             }
-            IsConnectedToPLC = false;
-            Is_ConnectedToPLC = IsConnectedToPLC;
-            Connect_status = enum_ConnectStatus.Disconnected;
-        }
-
-        public void ReconnectPLC()
-        {
-            if (tcpClient != null)
-            {
-                tcpClient.Close();
-                //关闭连接后马上更新连接状态标志
-                if (tcpClient != null)
-                {
-                    tcpClient.Close();
-                    //关闭连接后马上更新连接状态标志
-                }
-            }
-            ConnectToPLC();
         }
 
         byte[] TempBytes = new byte[4096];
@@ -132,27 +61,56 @@ namespace JTDevice
                 tcpClient.EndConnect(iar);
                 //连接成功标志
 
-                tryconnect_count = 0;
 
-                Logger.logger.Info(string.Format("Try to connect：{0}，Successful", remote_IP));
+                Logger.logger.Info(string.Format("Try to connect：{0}，Successful", deviceIP));
 
-                IsConnectedToPLC = true;
+                IsConnectedToDevice = true;
                 networkStream = tcpClient.GetStream();
                 //开始异步读取返回数据
                 networkStream.BeginRead(TempBytes, 0, TempBytes.Length, new AsyncCallback(AsynReceiveData), TempBytes);
             }
             catch (Exception ex)
             {
-                ShowMessageInConsoleDebug(ex.Message + "请检查远程IO服务器连接");
                 Console.WriteLine(ex.Message);
             }
         }
 
         /// <summary>
+        /// 异步接受数据
+        /// </summary>
+        /// <param name="iar"></param>
+        byte[] NewBytes = new byte[4096];
+        public void AsynReceiveData(IAsyncResult iar)
+        {
+            byte[] CurrentBytes = (byte[])iar.AsyncState;
+            try
+            {
+                if (IsConnectedToDevice)
+                {
+                    if (tcpClient.Connected)
+                    {
+                        //结束了本次数据接收
+                        int num = networkStream.EndRead(iar);
+                        ReceiveDeviceDataTime = DateTime.Now;
+                        //Console.WriteLine($"{DateTime.Now}:Rceicetime:{ReceivePlcDataTime}");
+                        networkStream.BeginRead(NewBytes, 0, NewBytes.Length, new AsyncCallback(AsynReceiveData), NewBytes);
+                    }
+                }
+
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message + "AsynReceiveData");
+                IsConnectedToDevice = false;
+            }
+        }
+
+
+        /// <summary>
         /// 发送数据
         /// <param name="SendBytes">需要发送的数据</param>
         /// </summary>
-        public void SendDataToPLC(byte[] SendBytes)
+        public void SendDataToDevice(byte[] SendBytes)
         {
             try
             {
@@ -171,63 +129,127 @@ namespace JTDevice
                     tcpClient.Close();
                     //关闭连接后马上更新连接状态标志
                 }
-                ShowMessageInConsoleDebug(ex.Message);
-                Console.WriteLine(ex.Message + "SendDataToPLC");
-                IsConnectedToPLC = false;
+                Console.WriteLine(ex.Message + "SendDataToDevice");
+                IsConnectedToDevice = false;
             }
         }
 
-        /// <summary>
-        /// 异步接受数据
-        /// </summary>
-        /// <param name="iar"></param>
-        byte[] NewBytes = new byte[4096];
-        public void AsynReceiveData(IAsyncResult iar)
+    }
+
+    public class Device : IDisposable
+    {
+        public string DeviceIP { get; set; }
+        public int DevicePort { get; set; } = 5677;
+
+        private int deviceID;
+        private DeviceConnector connector;
+        
+        private bool Heartbeat = false;
+        private bool ShowConnect_flag = false;
+
+        private int tryconnect_count = 0;
+
+        public enum_ConnectStatus Connect_status;
+
+        private int plctask_count = 0;
+        private bool boolReconnectTimerEnable = false;   //5000ms
+        private bool boolDevice_TimerEnable = false;   //1000ms
+
+        public Device(int id, string ip, int port)
         {
-            byte[] CurrentBytes = (byte[])iar.AsyncState;
+            deviceID = id;
+            connector = new DeviceConnector(ip, port);
+        }
+
+        public void task()
+        {
+            ThreadStart threadStart = new ThreadStart(Connect);//通过ThreadStart委托告诉子线程执行什么方法　　
+            Thread thread = new Thread(threadStart);
+            thread.Start();                                      //启动新线程                                              //thread.Abort();                                    //终止改线程，比较粗暴
+        }
+
+        public void Connect()
+        {
+            if (!connector.IsConnectedToDevice)
+            {
+                ConnectToDevice();
+                ShowConnect_flag = true;
+            }
+        }
+
+        public void CloseByButton()
+        {
+            boolDevice_TimerEnable = false;
+            boolReconnectTimerEnable = false;
+            Disconnect();
+        }
+
+        public void ConnectToDevice()
+        {
             try
             {
-                if (IsConnectedToPLC)
+                boolDevice_TimerEnable = true;//是否执行RemoteIO连接状态事件；
+                boolReconnectTimerEnable = true;//是否执行Reconnect事件；
+
+                tryconnect_count++;
+                if (tryconnect_count == int.MaxValue) { tryconnect_count = 0; }
+                Console.WriteLine($"{DateTime.Now}:Device{this.deviceID} Try to connect：{DeviceIP}，Count：{tryconnect_count}");
+                Logger.logger.Info(string.Format($"Device{this.deviceID}  Try to connect：{DeviceIP}，Count：{tryconnect_count}"));
+                if (tryconnect_count > 99999)
                 {
-                    if (tcpClient.Connected)
-                    {
-                        //结束了本次数据接收
-                        int num = networkStream.EndRead(iar);
-                        //这里展示结果为InfoModel的CurrBytes属性，将返回的数据添加至返回数据容器中
-                        ReceiveData(CurrentBytes);
-                        ReceivePlcDataTime = DateTime.Now;
-                        //Console.WriteLine($"{DateTime.Now}:Rceicetime:{ReceivePlcDataTime}");
-                        networkStream.BeginRead(NewBytes, 0, NewBytes.Length, new AsyncCallback(AsynReceiveData), NewBytes);
-                    }
+                    tryconnect_count = 0;
+
                 }
 
             }
+            catch (SocketException socketEx)
+            {
+                // 处理网络相关的异常
+                Logger.logger.Error(socketEx, "Network error occurred while connecting to the device.");
+                // 可能的错误恢复逻辑，比如重试
+            }
+            catch (IOException ioEx)
+            {
+                // 处理I/O异常
+                Logger.logger.Error(ioEx, "I/O error occurred while connecting to the device.");
+            }
             catch (Exception ex)
             {
-                ShowMessageInConsoleDebug(ex.Message);
-                Console.WriteLine(ex.Message + "AsynReceiveData");
-                IsConnectedToPLC = false;
+                // 处理其他类型的异常
+                Logger.logger.Error(ex, "An unexpected error occurred while connecting to the device.");
+                throw; // 如果无法处理，则重新抛出异常
             }
         }
 
-        public void RemoteIO_TimeOut()
+        public void Disconnect()
         {
-            RemoteIO_TimeOut_event();
+            connector.Disconnect(); ;
+            Connect_status = enum_ConnectStatus.Disconnected;
+        }
+
+        public void Reconnect()
+        {
+            connector.Disconnect();
+            connector.Connect();
+        }
+
+        public void Device_TimeOut()
+        {
+            Device_TimeOut_event();
         }
 
         public void ReconnectTimeOut()
         {
-            if (!IsConnectedToPLC)
+            if (!connector.IsConnectedToDevice)
             {
-                ReconnectPLC();
+                Reconnect();
             }
         }
 
         public void Button_connect_Show()
         {
             DateTime startTime = DateTime.Now;
-            long time = (long)(startTime - ReceivePlcDataTime).TotalSeconds;
-            Is_ConnectedToPLC = IsConnectedToPLC;
+            long time = (long)(startTime - connector.ReceiveDeviceDataTime).TotalSeconds;
 
             //Console.WriteLine($"{DateTime.Now}:time:{time}");
             if ((time > 3) && (ShowConnect_flag == true))
@@ -238,39 +260,28 @@ namespace JTDevice
             else
             {
                 Heartbeat = true;
-                if (IsConnectedToPLC)
+                if (connector.IsConnectedToDevice)
                 {
                     Connect_status = enum_ConnectStatus.Connected;
                 }
             }
         }
 
-        public void RemoteIO_TimeOut_event()  //写入DO
+        public void Device_TimeOut_event()  //写入DO
         {
             Button_connect_Show();
         }
 
-        public Device(int deviceID)
-        {
-            this.deviceID = deviceID;
-            PLCTaskStart(deviceID);
-            Console.WriteLine($"{DateTime.Now}:设备{this.deviceID}开始连接");
-        }
-
-        private void PLCTaskStart(int id)
+        private void DeviceTaskStart(int id)
         {
             Thread t;
-            t = new Thread(PLCTask);
+            t = new Thread(DeviceTask);
             t.IsBackground = true;
             t.Name = $"PLCTask:" + id.ToString();
             t.Start();
         }
 
-        private int plctask_count = 0;
-        private bool boolReconnectTimerEnable = false;   //5000ms
-        private bool boolRemoteIO_TimerEnable = false;   //1000ms
-
-        private void PLCTask()
+        private void DeviceTask()
         {
             while (true)
             {
@@ -283,9 +294,9 @@ namespace JTDevice
 
                 if (plctask_count % 1 == 0)  //每一秒钟需要做的事情
                 {
-                    if (boolRemoteIO_TimerEnable)
+                    if (boolDevice_TimerEnable)
                     {
-                        RemoteIO_TimeOut();
+                        Device_TimeOut();
                     }
                 }
 
@@ -301,29 +312,6 @@ namespace JTDevice
         }
 
         public void Dispose()
-        {
-            Close();
-        }
-        public void Close()
-        {
-            try
-            {
-                ;
-            }
-            catch (Exception ex)
-            {
-                throw ex;
-            }
-        }
-
-        public void ShowMessageInConsoleDebug(string str)
-        {
-#if Debug
-		MessageBox.Show(str);
-#endif
-        }
-
-        public void ReceiveData(byte[] ReceiveBytes)
         {
             ;
         }
