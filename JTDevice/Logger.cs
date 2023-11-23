@@ -6,10 +6,8 @@ using System.Threading.Tasks;
 
 namespace JTDevice
 {
-    public enum ConnectStatus
+    public class Logger
     {
-        Disconnected = 0,
-        Connecting = 1,
-        Connected = 2,
+        public static NLog.Logger logger = NLog.LogManager.GetCurrentClassLogger();
     }
 }

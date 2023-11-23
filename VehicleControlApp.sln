@@ -5,7 +5,7 @@ VisualStudioVersion = 17.4.33205.214
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "VehicleControlApp", "VehicleControlApp\VehicleControlApp.csproj", "{279B652D-09E6-492D-B0B6-D2527452992E}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "JTDevice", "JTDevice\JTDevice.csproj", "{9C4FB60A-8F33-4F64-9300-43A6D493AFFB}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "JTDevice", "JTDevice\JTDevice.csproj", "{9C4FB60A-8F33-4F64-9300-43A6D493AFFB}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

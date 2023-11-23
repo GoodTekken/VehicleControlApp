@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -15,6 +17,7 @@ using System.Windows.Navigation;
 using System.Windows.Shapes;
 using System.Xml;
 using JTDevice;
+using Microsoft.Extensions.Configuration;
 
 namespace VehicleControlApp
 {
@@ -26,52 +29,46 @@ namespace VehicleControlApp
         public MainWindow()
         {
             InitializeComponent();
-            SingletonClient.Instance.DataReceived += OnDataReceived;
             this.DataContext = positionData;
+            var builder = new ConfigurationBuilder()
+            .SetBasePath(Directory.GetCurrentDirectory())
+            .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
+            IConfigurationRoot configuration = builder.Build();
+            txtServerIP.Text = configuration["AppSettings:CVC700_IP"];
+            txtPort.Text     = configuration["AppSettings:CVC700_PORT"];
             device = new Device(0, txtServerIP.Text, int.Parse(txtPort.Text));
+            device.DataProcessed += OnDataReceived;
         }
-        private bool isConnected = false;
+
         private void Connect_Click(object sender, RoutedEventArgs e)
         {
-            if (!isConnected)
+            if (device.Connect_status == ConnectStatus.Disconnected)
             {
-                try
-                {
-                    //SingletonClient.Instance.Connect(txtServerIP.Text, int.Parse(txtPort.Text));
-                    device.Connect();
-                    AppendMessage("Connected to server");
-                    isConnected = true;
-                    btnConnect.Content = "Disconnect";
-                    btnConnect.Background = new SolidColorBrush(Colors.Green);
-                }
-                catch (Exception ex)
-                {
-                    AppendMessage($"Error: {ex.Message}");
-                }
+                Thread t;
+                t = new Thread(device.Connect);
+                t.IsBackground = true;
+                t.Name = $"CVC7000";
+                t.Start();
+                btnConnect.Content = "Disconnect";
+                btnConnect.Background = new SolidColorBrush(Colors.Green);
+                Logger.logger.Info(string.Format($"Start to connect device:{device.DeviceIP},task：{t.Name}，taskThread:{t.ManagedThreadId}"));
             }
-            else
+            else //在重连或者连接状态就会断开连接
             {
-                //SingletonClient.Instance.Disconnect();
-                device.Disconnect();
-                AppendMessage("Disconnected from server");
-                isConnected = false;
+                device.CloseByButton();
                 btnConnect.Content = "Connect";
                 btnConnect.Background = new SolidColorBrush(Colors.Red);
+                Logger.logger.Info(string.Format($"End to connect device by manual:{device.DeviceIP}"));
             }
         }
 
-        //private void SendCommand_Click(object sender, RoutedEventArgs e)
-        //{
-        //    string response = SingletonClient.Instance.SendAndReceive(BuildCommand(GetSelectedMode()));
-        //    txtMessages.Text += $"Server Response: {response}\n";
-        //}
 
         private void Mode_Checked(object sender, RoutedEventArgs e)
         {
             // 确保窗口已完全加载，避免在初始化时触发事件
             if (!IsInitialized) return;
 
-            if (isConnected == false)
+            if (device.Connect_status != ConnectStatus.Connected)
             {
                 AppendMessage("请先连接车载服务器，端口:5677.");
                 return;
@@ -102,7 +99,7 @@ namespace VehicleControlApp
             string command = BuildModeChangeCommand(mode);
 
             // 发送指令
-            SingletonClient.Instance.Send(command);
+            device.Send(command);
             //AppendMessage($"Server Response: {response}");
         }
 
@@ -127,7 +124,7 @@ namespace VehicleControlApp
 
         private void SendCommand_Click(object sender, RoutedEventArgs e)
         {
-            if(isConnected == false)
+            if(device.Connect_status != ConnectStatus.Connected)
             {
                 AppendMessage("请先连接车载服务器，端口:5677.");
                 return;
@@ -142,13 +139,37 @@ namespace VehicleControlApp
             if (!string.IsNullOrWhiteSpace(txtPointID.Text))
             {
                 string command = BuildLocalOrderCommand();
-                SingletonClient.Instance.Send(command);
-                //AppendMessage($"Server Response: {response}");
+                device.Send(command);
             }
             else
             {
                 AppendMessage("Destination Point is required to send a command.");
             }
+        }
+
+        private void SendNavigationMothedCommand_Click(object sender, RoutedEventArgs e)
+        {
+            if (device.Connect_status != ConnectStatus.Connected)
+            {
+                AppendMessage("请先连接车载服务器，端口:5677.");
+                return;
+            }
+
+            string command = "<CPI2><Request><Set Tag=\"VehicleNavigator.SetNavMethod\"><Item Tag=\"VehicleNavigator.SetNavMethod\" Path=\"Status.VehicleNavigator.SetNavMethod\">1</Item></Set></Request></CPI2>\n";
+            device.Send(command);
+
+            command = "<CPI2><Request><Set Tag=\"VehicleNavigator.SetNavMethodEN\"><Item Tag=\"VehicleNavigator.SetNavMethodEN\" Path=\"Status.VehicleNavigator.SetNavMethodEN\">1</Item></Set></Request></CPI2>\n<CPI2><Request><Subscribe Tag=\"NavigationHandler.SetNavigation\"><Item Tag=\"VehicleNavigator.NavMethod\" Path=\"Status.VehicleNavigator.NavMethod\" /><Item Tag=\"VehicleNavigator.SetNavMethodENO\" Path=\"Status.VehicleNavigator.SetNavMethodENO\" /><Item Tag=\"VehicleNavigator.SetNavMethodErr\" Path=\"Status.VehicleNavigator.SetNavMethodErr\" /><Item Tag=\"VehicleNavigator.SetNavMethodErrText\" Path=\"Status.VehicleNavigator.SetNavMethodErrText\" /></Subscribe></Request></CPI2>\r\n\n";
+            device.Send(command);
+
+            command = "<CPI2><Request><Set Tag=\"VehicleNavigator.SetNavMethodEN\"><Item Tag=\"VehicleNavigator.SetNavMethodEN\" Path=\"Status.VehicleNavigator.SetNavMethodEN\">0</Item></Set></Request></CPI2>\n";
+            device.Send(command);
+
+            command = "<CPI2><Request><Subscribe Tag=\"VehicleNavigator.SetNavMethodENO\"><Item Tag=\"VehicleNavigator.SetNavMethodENO\" Path=\"Status.VehicleNavigator.SetNavMethodENO\" /></Subscribe></Request></CPI2>\r\n<CPI2><Request><Unsubscribe Tag=\"NavigationHandler.SetNavigation\" SubscriptionID=\"8\" /></Request></CPI2>\n";
+            device.Send(command);
+
+            command = "<CPI2><Request><Set Tag=\"VehicleNavigator.SetNavMethodEN\"><Item Tag=\"VehicleNavigator.SetNavMethodEN\" Path=\"Status.VehicleNavigator.SetNavMethodEN\">0</Item></Set></Request></CPI2>\n";
+            device.Send(command);
+
         }
 
         private string BuildLocalOrderCommand()
@@ -231,7 +252,7 @@ namespace VehicleControlApp
                 {
                     string command = "<CPI2><Request><Subscribe Tag=\"external_638361791109148754\" MinInterval=\"500\"><Item Tag=\"Position.Angle\" Path=\"Status.Position.Angle\" /><Item Tag=\"Position.Angle2\" Path=\"Status.Position.Angle2\" /><Item Tag=\"Position.NavLevel\" Path=\"Status.Position.NavLevel\" /><Item Tag=\"Position.Valid\" Path=\"Status.Position.Valid\" /><Item Tag=\"Position.X\" Path=\"Status.Position.X\" /><Item Tag=\"Position.Y\" Path=\"Status.Position.Y\" /><Item Tag=\"ExternalPath.ReqExtSegment\" Path=\"Status.ExternalPath.ReqExtSegment\" /><Item Tag=\"ExternalPath.ReqSegmentId\" Path=\"Status.ExternalPath.ReqSegmentId\" /></Subscribe></Request></CPI2>\n";
                     // 发送指令
-                    SingletonClient.Instance.Send(command);
+                    device.Send(command);
                     //AppendMessage($"Server Response: {response}");
                 }
             }

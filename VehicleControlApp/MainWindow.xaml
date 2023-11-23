@@ -51,9 +51,9 @@
         </TabItem>
 
         <!-- Diagnostic Tab -->
-        <TabItem Header="Diagnostic">
+        <TabItem Header="Navigation">
             <Grid>
-               
+                <Button Content="Send Command" Margin="244,-9,176,500" Click="SendNavigationMothedCommand_Click" RenderTransformOrigin="0.5,0.5"></Button>
             </Grid>
         </TabItem>
 
